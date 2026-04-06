@@ -4,7 +4,6 @@ import Login from './Login'
 import GestionUsuarios from './GestionUsuarios'
 import MapaCalor from './MapaCalor'
 import ParteIncidencia from './ParteIncidencia'
-import Landing from './Landing'
 import './App.css'
 
 // ── Constantes UI ─────────────────────────────────────────────────────────────
@@ -48,11 +47,6 @@ function formatFecha(iso) {
 export default function App() {
   const [usuario, setUsuario] = useState(null)
   const [checkingAuth, setCheckingAuth] = useState(true)
-
-  // Rutas sencillas
-  if (window.location.pathname === '/landing') {
-    return <Landing />
-  }
 
   // Verificar sesión guardada en localStorage
   useEffect(() => {
