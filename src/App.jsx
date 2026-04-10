@@ -202,6 +202,9 @@ function Dashboard({ usuario, onLogout }) {
     e.stopPropagation()
     if (!window.confirm('¿Estás seguro de eliminar esta incidencia permanentemente?')) return
     
+    // Liberar sesiones_bot para no violar la Foreign Key ("sesiones_bot_incidencia_id_pendiente_fkey")
+    await supabase.from('sesiones_bot').update({ incidencia_id_pendiente: null }).eq('incidencia_id_pendiente', id)
+
     // Primero borramos las evidencias relacionadas para no violar FK (si no hay CASCADE)
     await supabase.from('evidencias').delete().eq('incidencia_id', id)
     // Luego borramos el timeline
