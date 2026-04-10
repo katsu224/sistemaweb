@@ -17,22 +17,44 @@ const ESTADOS = {
 }
 
 const PRIORIDADES = {
-  ALTA:  { label: 'ALTA',  color: '#EF4444', bg: '#FEE2E2' },
-  MEDIA: { label: 'MEDIA', color: '#F59E0B', bg: '#FEF3C7' },
-  BAJA:  { label: 'BAJA',  color: '#10B981', bg: '#D1FAE5' },
+  CRITICA: { label: 'CRÍTICA', color: '#DC2626', bg: '#FEE2E2', border: '#EF4444' },
+  ALTA:    { label: 'ALTA',    color: '#EF4444', bg: '#FEE2E2' },
+  MEDIA:   { label: 'MEDIA',   color: '#F59E0B', bg: '#FEF3C7' },
+  BAJA:    { label: 'BAJA',    color: '#10B981', bg: '#D1FAE5' },
 }
 
-const TIPOS_ICON = {
-  robo: '🚨', hurto: '🚨', accidente: '🚗', choque: '🚗',
-  pelea: '⚠️', riña: '⚠️', disturbio: '⚠️', incendio: '🔥',
-  sospechoso: '👁️', pandillaje: '👥', violencia: '🔴', persona: '🧑',
-  vehículo: '🚗', daños: '🏚️', comercio: '🛒', abandono: '😢',
+// ── 15 Tipos estandarizados ─────────────────────────────────────────────────
+const TIPOS = {
+  ROBO:           { label: 'Robo / Asalto',       icon: '🚨', color: '#EF4444' },
+  INCENDIO:       { label: 'Incendio',             icon: '🔥', color: '#DC2626' },
+  DISTURBIO:      { label: 'Pelea / Disturbio',    icon: '⚠️', color: '#F59E0B' },
+  ACCIDENTE:      { label: 'Accidente vehicular',  icon: '🚗', color: '#F97316' },
+  SOSPECHOSO:     { label: 'Persona sospechosa',   icon: '👁️', color: '#8B5CF6' },
+  VANDALISMO:     { label: 'Vandalismo / Daños',   icon: '🏚️', color: '#6366F1' },
+  DROGAS:         { label: 'Drogas / Consumo',     icon: '💊', color: '#A855F7' },
+  RUIDO:          { label: 'Ruido excesivo',        icon: '🔊', color: '#3B82F6' },
+  VEHICULO:       { label: 'Vehículo sospechoso',  icon: '🚙', color: '#64748B' },
+  ANIMAL:         { label: 'Animal peligroso',      icon: '🐕', color: '#059669' },
+  SERVICIOS:      { label: 'Problema de servicios', icon: '🔧', color: '#0EA5E9' },
+  PERSONA_RIESGO: { label: 'Persona en riesgo',     icon: '🧑', color: '#EC4899' },
+  VIOLENCIA_DOM:  { label: 'Violencia doméstica',   icon: '🔴', color: '#BE123C' },
+  EMERGENCIA_MED: { label: 'Emergencia médica',     icon: '🚑', color: '#DC2626' },
+  OTRO:           { label: 'Otro',                   icon: '📋', color: '#94A3B8' },
 }
 
-function getIconTipo(descripcion = '') {
-  const t = descripcion.toLowerCase()
-  const key = Object.keys(TIPOS_ICON).find(k => t.includes(k))
-  return TIPOS_ICON[key] ?? '📋'
+const SERVICIOS_ICONS = {
+  patrulla:   '🚔',
+  bomberos:   '🚒',
+  ambulancia: '🚑',
+  pnp:        '👮',
+}
+
+function getTipo(datosIA, incidencia) {
+  // Intentar tipo de la incidencia directamente (nueva columna)
+  if (incidencia.tipo && TIPOS[incidencia.tipo]) return TIPOS[incidencia.tipo]
+  // Intentar desde datos IA
+  if (datosIA?.tipo && TIPOS[datosIA.tipo]) return TIPOS[datosIA.tipo]
+  return TIPOS.OTRO
 }
 
 function formatFecha(iso) {
@@ -43,12 +65,21 @@ function formatFecha(iso) {
   })
 }
 
+// Helper: get valor from new datos format { campo: { valor, confianza } }
+function val(datos, campo) {
+  if (!datos) return null
+  const d = datos[campo]
+  if (!d) return null
+  if (typeof d === 'object' && d.valor) return d.valor
+  if (typeof d === 'string' && d !== 'no indicado' && d !== 'no indicada') return d
+  return null
+}
+
 // ── App principal ─────────────────────────────────────────────────────────────
 export default function App() {
   const [usuario, setUsuario] = useState(null)
   const [checkingAuth, setCheckingAuth] = useState(true)
 
-  // Verificar sesión guardada en localStorage
   useEffect(() => {
     const saved = localStorage.getItem('serenazgo_user')
     if (saved) {
@@ -59,9 +90,7 @@ export default function App() {
     setCheckingAuth(false)
   }, [])
 
-  const handleLogin = (u) => {
-    setUsuario(u)
-  }
+  const handleLogin = (u) => setUsuario(u)
 
   const handleLogout = () => {
     localStorage.removeItem('serenazgo_user')
@@ -74,9 +103,7 @@ export default function App() {
     </div>
   }
 
-  if (!usuario) {
-    return <Login onLogin={handleLogin} />
-  }
+  if (!usuario) return <Login onLogin={handleLogin} />
 
   return <Dashboard usuario={usuario} onLogout={handleLogout} />
 }
@@ -87,6 +114,7 @@ function Dashboard({ usuario, onLogout }) {
   const [incidencias, setIncidencias] = useState([])
   const [filtroEstado, setFiltroEstado] = useState('todos')
   const [filtroPrioridad, setFiltroPrioridad] = useState('todos')
+  const [filtroTipo, setFiltroTipo] = useState('todos')
   const [busqueda, setBusqueda] = useState('')
   const [loading, setLoading] = useState(true)
   const [toast, setToast] = useState(null)
@@ -97,11 +125,11 @@ function Dashboard({ usuario, onLogout }) {
   const municipioId = usuario.municipio_id
   const municipioNombre = usuario.municipios?.nombre || 'Mi Municipio'
 
-  // Carga inicial filtrada por municipio
+  // Carga inicial
   useEffect(() => {
     supabase
       .from('incidencias')
-      .select('*, usuarios(nombres, apellidos, telefono)')
+      .select('*, usuarios(nombres, apellidos, telefono), evidencias(*)')
       .eq('municipio_id', municipioId)
       .order('created_at', { ascending: false })
       .limit(200)
@@ -111,7 +139,7 @@ function Dashboard({ usuario, onLogout }) {
       })
   }, [municipioId])
 
-  // Realtime filtrado por municipio
+  // Realtime
   useEffect(() => {
     const channel = supabase
       .channel('incidencias-realtime')
@@ -120,11 +148,12 @@ function Dashboard({ usuario, onLogout }) {
         async ({ new: nueva }) => {
           const { data: conUsuario } = await supabase
             .from('incidencias')
-            .select('*, usuarios(nombres, apellidos, telefono)')
+            .select('*, usuarios(nombres, apellidos, telefono), evidencias(*)')
             .eq('id', nueva.id)
             .single()
           setIncidencias(prev => [conUsuario || nueva, ...prev])
-          mostrarToast(`🚨 Nueva incidencia: ${nueva.lugar_descripcion || 'Sin zona'} — ${nueva.prioridad}`)
+          const prioLabel = PRIORIDADES[nueva.prioridad]?.label || nueva.prioridad
+          mostrarToast(`🚨 Nueva incidencia: ${nueva.lugar_descripcion || 'Sin zona'} — ${prioLabel}`)
         }
       )
       .on('postgres_changes',
@@ -133,6 +162,26 @@ function Dashboard({ usuario, onLogout }) {
           setIncidencias(prev =>
             prev.map(i => i.id === actualizada.id ? { ...i, ...actualizada } : i)
           )
+        }
+      )
+      .on('postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'evidencias' },
+        ({ new: nuevaFoto }) => {
+          setIncidencias(prev => prev.map(i => {
+            if (i.id === nuevaFoto.incidencia_id) {
+               const evid = i.evidencias || []
+               if (!evid.find(e => e.id === nuevaFoto.id)) {
+                 return { ...i, evidencias: [...evid, nuevaFoto] }
+               }
+            }
+            return i
+          }))
+        }
+      )
+      .on('postgres_changes',
+        { event: 'DELETE', schema: 'public', table: 'incidencias' },
+        ({ old: eliminada }) => {
+          setIncidencias(prev => prev.filter(i => i.id !== eliminada.id))
         }
       )
       .subscribe()
@@ -149,14 +198,34 @@ function Dashboard({ usuario, onLogout }) {
     await supabase.from('incidencias').update({ estado: nuevoEstado }).eq('id', id)
   }
 
+  const borrarIncidencia = async (id, e) => {
+    e.stopPropagation()
+    if (!window.confirm('¿Estás seguro de eliminar esta incidencia permanentemente?')) return
+    
+    // Primero borramos las evidencias relacionadas para no violar FK (si no hay CASCADE)
+    await supabase.from('evidencias').delete().eq('incidencia_id', id)
+    // Luego borramos el timeline
+    await supabase.from('incidencia_timeline').delete().eq('incidencia_id', id)
+    // Finalmente eliminamos la incidencia
+    const { error } = await supabase.from('incidencias').delete().eq('id', id)
+    
+    if (error) {
+       mostrarToast('❌ Error eliminando incidencia: ' + error.message)
+    } else {
+       mostrarToast('🗑️ Incidencia eliminada')
+       setIncidencias(prev => prev.filter(i => i.id !== id))
+    }
+  }
+
   // Filtros
   const lista = incidencias.filter(i => {
     const okEstado = filtroEstado === 'todos' || i.estado === filtroEstado
     const okPrioridad = filtroPrioridad === 'todos' || i.prioridad === filtroPrioridad
+    const okTipo = filtroTipo === 'todos' || i.tipo === filtroTipo
     const okBusqueda = !busqueda ||
-      [i.descripcion_original, i.lugar_descripcion, i.codigo_reo, i.descripcion_limpia]
+      [i.descripcion_original, i.lugar_descripcion, i.descripcion_limpia]
         .join(' ').toLowerCase().includes(busqueda.toLowerCase())
-    return okEstado && okPrioridad && okBusqueda
+    return okEstado && okPrioridad && okTipo && okBusqueda
   })
 
   const conteos = {
@@ -164,6 +233,7 @@ function Dashboard({ usuario, onLogout }) {
     CONFIRMADO: incidencias.filter(i => i.estado === 'CONFIRMADO').length,
     BORRADOR: incidencias.filter(i => i.estado === 'BORRADOR').length,
     ALTA: incidencias.filter(i => i.prioridad === 'ALTA').length,
+    CRITICA: incidencias.filter(i => i.prioridad === 'CRITICA').length,
   }
 
   return (
@@ -176,7 +246,7 @@ function Dashboard({ usuario, onLogout }) {
           <span style={{ fontSize: 28 }}>🛡️</span>
           <div>
             <h1 className="header-title">{municipioNombre}</h1>
-            <p className="header-sub">Serenazgo IA — {usuario.nombres} ({usuario.rol})</p>
+            <p className="header-sub">Serenazgo IA v2 — {usuario.nombres} ({usuario.rol})</p>
           </div>
         </div>
         <div className="header-right">
@@ -200,17 +270,14 @@ function Dashboard({ usuario, onLogout }) {
       </header>
 
       <div className="body">
-        {/* ── Tab: Serenos ──────────────────────────────── */}
         {tab === 'serenos' && (
           <GestionUsuarios municipioId={municipioId} municipioNombre={municipioNombre} />
         )}
 
-        {/* ── Tab: Mapa ────────────────────────────────── */}
         {tab === 'mapa' && (
           <MapaCalor municipioId={municipioId} />
         )}
 
-        {/* ── Tab: Incidencias ─────────────────────────── */}
         {tab === 'incidencias' && (
           <>
             {/* Tarjetas */}
@@ -219,7 +286,8 @@ function Dashboard({ usuario, onLogout }) {
                 { label: 'Total', value: conteos.total, color: '#64748B', icon: '📊' },
                 { label: 'Confirmadas', value: conteos.CONFIRMADO, color: '#10B981', icon: '✅' },
                 { label: 'Borradores', value: conteos.BORRADOR, color: '#94A3B8', icon: '📝' },
-                { label: 'Prioridad Alta', value: conteos.ALTA, color: '#EF4444', icon: '🔴' },
+                { label: 'P. Alta', value: conteos.ALTA, color: '#EF4444', icon: '🔴' },
+                { label: 'P. Crítica', value: conteos.CRITICA, color: '#DC2626', icon: '🆘' },
               ].map(c => (
                 <div key={c.label} className="card">
                   <div className="card-header">
@@ -242,11 +310,19 @@ function Dashboard({ usuario, onLogout }) {
                 ))}
               </div>
               <div className="filters">
-                {['todos', 'ALTA', 'MEDIA', 'BAJA'].map(p => (
+                {['todos', 'CRITICA', 'ALTA', 'MEDIA', 'BAJA'].map(p => (
                   <button key={p} className={`filter-btn priority ${filtroPrioridad === p ? 'active' : ''}`} onClick={() => setFiltroPrioridad(p)}>
                     {p === 'todos' ? '⚡ Todo' : PRIORIDADES[p]?.label}
                   </button>
                 ))}
+              </div>
+              <div className="filters">
+                <select value={filtroTipo} onChange={e => setFiltroTipo(e.target.value)} className="select-estado" style={{ minWidth: 140 }}>
+                  <option value="todos">📋 Todos los tipos</option>
+                  {Object.entries(TIPOS).map(([k, v]) => (
+                    <option key={k} value={k}>{v.icon} {v.label}</option>
+                  ))}
+                </select>
               </div>
               {seleccionados.size > 0 && (
                 <button className="btn-generar-parte" onClick={() => setMostrarDocumento(true)}>
@@ -274,7 +350,7 @@ function Dashboard({ usuario, onLogout }) {
                           }}
                         />
                       </th>
-                      {['Prioridad', 'Descripción', 'Zona', 'Sereno', 'Estado', 'Fecha', 'Acción'].map(h => (
+                      {['Prioridad', 'Tipo / Descripción', 'Zona', 'Sereno', 'Estado', 'Fecha', 'Acción'].map(h => (
                         <th key={h}>{h}</th>
                       ))}
                     </tr>
@@ -285,7 +361,8 @@ function Dashboard({ usuario, onLogout }) {
                         try { return typeof i.descripcion_limpia === 'string' ? JSON.parse(i.descripcion_limpia) : i.descripcion_limpia }
                         catch { return null }
                       })()
-                      const tipoTexto = datosIA?.tipo_incidencia || 'Sin clasificar'
+                      const tipoInfo = getTipo(datosIA, i)
+                      const datos = datosIA?.datos || {}
 
                       return (
                         <tr key={i.id} onClick={() => setDetalleAbierto(detalleAbierto === i.id ? null : i.id)}>
@@ -297,30 +374,33 @@ function Dashboard({ usuario, onLogout }) {
                             }} />
                           </td>
                           <td>
-                            <span className="badge" style={{ background: PRIORIDADES[i.prioridad]?.bg, color: PRIORIDADES[i.prioridad]?.color }}>
-                              {i.prioridad}
+                            <span className="badge" style={{
+                              background: PRIORIDADES[i.prioridad]?.bg,
+                              color: PRIORIDADES[i.prioridad]?.color,
+                              border: i.prioridad === 'CRITICA' ? '2px solid #DC2626' : undefined,
+                              fontWeight: i.prioridad === 'CRITICA' ? 'bold' : undefined,
+                              animation: i.prioridad === 'CRITICA' ? 'pulse 1.5s infinite' : undefined,
+                            }}>
+                              {PRIORIDADES[i.prioridad]?.label || i.prioridad}
                             </span>
                             {i.requiere_pnp && <span className="pnp-badge" title="Requiere PNP">🚔</span>}
+                            {i.despacho && <span className="pnp-badge" title="Despacho inmediato">⚡</span>}
                           </td>
                           <td>
-                            <div className="tipo-cell">{getIconTipo(tipoTexto)}&nbsp;<strong>{tipoTexto}</strong></div>
+                            <div className="tipo-cell">
+                              <span style={{ fontSize: 16 }}>{tipoInfo.icon}</span>&nbsp;
+                              <strong style={{ color: tipoInfo.color }}>{tipoInfo.label}</strong>
+                              {datosIA?.modo === 'ALERTA' && (
+                                <span className="badge" style={{ background: '#FEE2E2', color: '#DC2626', fontSize: 10, marginLeft: 6, padding: '1px 6px' }}>
+                                  ALERTA
+                                </span>
+                              )}
+                            </div>
                             <div className="desc-cell">{i.descripcion_original?.slice(0, 80)}{i.descripcion_original?.length > 80 ? '...' : ''}</div>
+
+                            {/* Detalle expandido */}
                             {detalleAbierto === i.id && datosIA && (
-                              <div className="detalle-expandido">
-                                <div className="detalle-grid">
-                                  {datosIA.lugar && datosIA.lugar !== 'no indicado' && <div><strong>📍 Lugar:</strong> {datosIA.lugar}</div>}
-                                  {datosIA.numero_sujetos && datosIA.numero_sujetos !== 'no indicado' && <div><strong>👥 Sujetos:</strong> {datosIA.numero_sujetos}</div>}
-                                  {datosIA.descripcion_sujetos && datosIA.descripcion_sujetos !== 'no indicado' && <div><strong>🧑 Desc:</strong> {datosIA.descripcion_sujetos}</div>}
-                                  {datosIA.vehiculo_tipo && datosIA.vehiculo_tipo !== 'no indicado' && <div><strong>🚗 Vehículo:</strong> {datosIA.vehiculo_tipo} {datosIA.vehiculo_color || ''}</div>}
-                                  {datosIA.tipo_arma && datosIA.tipo_arma !== 'no indicado' && <div><strong>⚠️ Arma:</strong> {datosIA.tipo_arma}</div>}
-                                  {datosIA.victimas && datosIA.victimas !== 'no indicado' && <div><strong>🚑 Víctimas:</strong> {datosIA.victimas}</div>}
-                                  {datosIA.accion_tomada && datosIA.accion_tomada !== 'no indicado' && <div><strong>✊ Acción:</strong> {datosIA.accion_tomada}</div>}
-                                  {i.codigo_reo && <div><strong>📄 REO:</strong> {i.codigo_reo}</div>}
-                                </div>
-                                {datosIA.campos_faltantes?.length > 0 && (
-                                  <div className="campos-faltantes">⚠️ Faltantes: {datosIA.campos_faltantes.join(', ')}</div>
-                                )}
-                              </div>
+                              <DetalleExpandido datosIA={datosIA} datos={datos} incidencia={i} />
                             )}
                           </td>
                           <td>{i.lugar_descripcion || <span className="text-muted">—</span>}</td>
@@ -339,14 +419,19 @@ function Dashboard({ usuario, onLogout }) {
                           </td>
                           <td className="fecha-cell">{formatFecha(i.created_at)}</td>
                           <td onClick={e => e.stopPropagation()}>
-                            <select value={i.estado} onChange={e => cambiarEstado(i.id, e.target.value)} className="select-estado">
-                              <option value="BORRADOR">Borrador</option>
-                              <option value="PENDIENTE">Pendiente</option>
-                              <option value="CONFIRMADO">Confirmado</option>
-                              <option value="CORREGIDO">Corregido</option>
-                              <option value="ENVIADO_REO">Enviado REO</option>
-                              <option value="ARCHIVADO">Archivado</option>
-                            </select>
+                            <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                              <select value={i.estado} onChange={e => cambiarEstado(i.id, e.target.value)} className="select-estado">
+                                <option value="BORRADOR">Borrador</option>
+                                <option value="PENDIENTE">Pendiente</option>
+                                <option value="CONFIRMADO">Confirmado</option>
+                                <option value="CORREGIDO">Corregido</option>
+                                <option value="ENVIADO_REO">Enviado REO</option>
+                                <option value="ARCHIVADO">Archivado</option>
+                              </select>
+                              <button onClick={(e) => borrarIncidencia(i.id, e)} className="btn-borrar" title="Eliminar Incidencia">
+                                🗑️
+                              </button>
+                            </div>
                           </td>
                         </tr>
                       )
@@ -359,13 +444,133 @@ function Dashboard({ usuario, onLogout }) {
         )}
       </div>
 
-      {/* ── Documento Parte de Incidencia ────────────── */}
+      {/* ── Documento Parte de Incidencia */}
       {mostrarDocumento && (
         <ParteIncidencia
           incidencias={incidencias.filter(i => seleccionados.has(i.id))}
           municipioNombre={municipioNombre}
           onCerrar={() => setMostrarDocumento(false)}
         />
+      )}
+    </div>
+  )
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Detalle Expandido — Renderizado dinámico por tipo con confianza
+// ═══════════════════════════════════════════════════════════════════════════════
+function DetalleExpandido({ datosIA, datos, incidencia }) {
+  // Definir qué campos mostrar en orden lógico
+  const camposRender = [
+    { key: 'ubicacion', label: '📍 Ubicación' },
+    { key: 'referencia', label: '📌 Referencia' },
+    { key: 'hora_incidente', label: '⏰ Hora' },
+    { key: 'num_sospechosos', label: '👥 Sospechosos' },
+    { key: 'num_personas', label: '👥 Personas involucradas' },
+    { key: 'descripcion_sospechosos', label: '🧑 Desc. sospechosos' },
+    { key: 'descripcion_persona', label: '🧑 Desc. persona' },
+    { key: 'armas', label: '⚠️ Arma' },
+    { key: 'heridos', label: '🚑 Heridos' },
+    { key: 'victimas', label: '🚑 Víctimas' },
+    { key: 'vehiculo_fuga', label: '🚗 Vehículo fuga' },
+    { key: 'tipo_vehiculos', label: '🚗 Tipo vehículo' },
+    { key: 'tipo_vehiculo', label: '🚗 Tipo vehículo' },
+    { key: 'vehiculo_color', label: '🎨 Color vehículo' },
+    { key: 'placas', label: '🔢 Placa' },
+    { key: 'direccion_fuga', label: '➡️ Dirección fuga' },
+    { key: 'objeto_robado', label: '📦 Objeto robado' },
+    { key: 'personas_atrapadas', label: '🆘 Personas atrapadas' },
+    { key: 'magnitud', label: '🔥 Magnitud' },
+    { key: 'tipo_estructura', label: '🏠 Estructura' },
+    { key: 'propagacion', label: '📈 Propagación' },
+    { key: 'violencia', label: '👊 Violencia' },
+    { key: 'menores_presentes', label: '👶 Menores' },
+    { key: 'estado_persona', label: '🏥 Estado persona' },
+    { key: 'estado_paciente', label: '🏥 Estado paciente' },
+    { key: 'consciente', label: '👀 Consciente' },
+    { key: 'respirando', label: '🫁 Respirando' },
+    { key: 'sintomas', label: '🩺 Síntomas' },
+    { key: 'tipo_violencia', label: '⚠️ Tipo violencia' },
+    { key: 'agresor_presente', label: '⚠️ Agresor presente' },
+    { key: 'tipo_dano', label: '💥 Tipo daño' },
+    { key: 'tipo_animal', label: '🐕 Animal' },
+    { key: 'comportamiento', label: '⚡ Comportamiento' },
+    { key: 'tipo_problema', label: '🔧 Problema' },
+    { key: 'riesgo_peatonal', label: '⚠️ Riesgo peatonal' },
+    { key: 'accion_tomada', label: '✊ Acción tomada' },
+    { key: 'derivado_a', label: '📋 Derivado a' },
+    { key: 'observaciones', label: '📝 Observaciones' },
+  ]
+
+  const camposConValor = camposRender.filter(c => val(datos, c.key))
+
+  return (
+    <div className="detalle-expandido">
+      <div className="detalle-grid">
+        {camposConValor.map(c => {
+          const valor = val(datos, c.key)
+          const confianza = datos[c.key]?.confianza
+          return (
+            <div key={c.key} className="detalle-campo">
+              <strong>{c.label}:</strong>{' '}
+              <span>{valor}</span>
+              {confianza === 'inferido' && (
+                <span className="badge-confianza inferido" title="Inferido por IA">~</span>
+              )}
+              {confianza === 'confirmado' && (
+                <span className="badge-confianza confirmado" title="Confirmado por sereno">✓</span>
+              )}
+            </div>
+          )
+        })}
+
+        {/* Compat: mostrar campos viejos si no hay datos nuevos */}
+        {camposConValor.length === 0 && datosIA && (
+          <>
+            {datosIA.lugar && datosIA.lugar !== 'no indicado' && <div><strong>📍 Lugar:</strong> {datosIA.lugar}</div>}
+            {datosIA.numero_sujetos && datosIA.numero_sujetos !== 'no indicado' && <div><strong>👥 Sujetos:</strong> {datosIA.numero_sujetos}</div>}
+            {datosIA.descripcion_sujetos && datosIA.descripcion_sujetos !== 'no indicado' && <div><strong>🧑 Desc:</strong> {datosIA.descripcion_sujetos}</div>}
+            {datosIA.vehiculo_tipo && datosIA.vehiculo_tipo !== 'no indicado' && <div><strong>🚗 Vehículo:</strong> {datosIA.vehiculo_tipo} {datosIA.vehiculo_color || ''}</div>}
+            {datosIA.tipo_arma && datosIA.tipo_arma !== 'no indicado' && <div><strong>⚠️ Arma:</strong> {datosIA.tipo_arma}</div>}
+            {datosIA.victimas && datosIA.victimas !== 'no indicado' && <div><strong>🚑 Víctimas:</strong> {datosIA.victimas}</div>}
+            {datosIA.accion_tomada && datosIA.accion_tomada !== 'no indicado' && <div><strong>✊ Acción:</strong> {datosIA.accion_tomada}</div>}
+          </>
+        )}
+      </div>
+
+      {/* Servicios requeridos */}
+      {datosIA?.servicios_requeridos?.length > 0 && (
+        <div className="servicios-badges">
+          <strong>Servicios:</strong>{' '}
+          {datosIA.servicios_requeridos.map(s => (
+            <span key={s} className="badge-servicio">
+              {SERVICIOS_ICONS[s] || '•'} {s}
+            </span>
+          ))}
+        </div>
+      )}
+
+      {/* Evidencias */}
+      {incidencia.evidencias && incidencia.evidencias.length > 0 && (
+        <div className="evidencias-galeria">
+          <p style={{marginTop: 10, marginBottom: 5, fontSize: 12, color: 'var(--text-muted)'}}>
+            <strong>📸 Evidencias Gráficas ({incidencia.evidencias.length}):</strong>
+          </p>
+          <div style={{display: 'flex', gap: 10, flexWrap: 'wrap'}}>
+            {incidencia.evidencias.map(ev => (
+              <a href={ev.url_storage} target="_blank" rel="noreferrer" key={ev.id}>
+                <img src={ev.url_storage} alt="Evidencia" style={{width: 80, height: 80, objectFit: 'cover', borderRadius: 8, border: '1px solid var(--border-color)'}} />
+              </a>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Resumen corto */}
+      {datosIA?.resumen_corto && (
+        <div style={{marginTop: 8, fontSize: 12, color: 'var(--text-muted)', fontStyle: 'italic'}}>
+          💬 {datosIA.resumen_corto}
+        </div>
       )}
     </div>
   )

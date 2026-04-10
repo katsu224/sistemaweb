@@ -28,7 +28,7 @@ const camaraIcon = new L.DivIcon({
   iconAnchor: [15, 15],
 })
 
-const PRIORIDAD_PESO = { ALTA: 1.0, MEDIA: 0.6, BAJA: 0.3 }
+const PRIORIDAD_PESO = { CRITICA: 1.5, ALTA: 1.0, MEDIA: 0.6, BAJA: 0.3 }
 
 export default function MapaCalor({ municipioId }) {
   const [incidencias, setIncidencias] = useState([])

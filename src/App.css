@@ -151,7 +151,7 @@
 /* ── Cards ──────────────────────────────────────────────────────────────────── */
 .cards {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(5, 1fr);
   gap: 16px;
   margin-bottom: 28px;
 }
@@ -215,6 +215,23 @@
 .btn-generar-parte:hover {
   box-shadow: 0 4px 16px rgba(16, 185, 129, 0.35);
   transform: translateY(-1px);
+}
+
+.btn-borrar {
+  background: transparent;
+  border: none;
+  font-size: 16px;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 6px;
+  transition: all 0.2s;
+  opacity: 0.7;
+}
+
+.btn-borrar:hover {
+  background: rgba(239, 68, 68, 0.15);
+  opacity: 1;
+  transform: scale(1.1);
 }
 
 .search {
@@ -392,6 +409,54 @@
   color: #94A3B8;
 }
 
+.detalle-campo {
+  padding: 3px 0;
+}
+
+.badge-confianza {
+  display: inline-block;
+  margin-left: 4px;
+  width: 14px;
+  height: 14px;
+  line-height: 14px;
+  text-align: center;
+  border-radius: 50%;
+  font-size: 9px;
+  vertical-align: middle;
+}
+
+.badge-confianza.inferido {
+  background: rgba(245, 158, 11, 0.2);
+  color: #F59E0B;
+  border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+.badge-confianza.confirmado {
+  background: rgba(16, 185, 129, 0.2);
+  color: #10B981;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.servicios-badges {
+  margin-top: 10px;
+  font-size: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.badge-servicio {
+  display: inline-block;
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: rgba(59, 130, 246, 0.15);
+  color: #60A5FA;
+  font-size: 11px;
+  font-weight: 500;
+  border: 1px solid rgba(59, 130, 246, 0.2);
+}
+
 .campos-faltantes {
   margin-top: 8px;
   padding: 6px 10px;
@@ -441,12 +506,16 @@
 }
 
 /* ── Responsive ─────────────────────────────────────────────────────────────── */
+@media (max-width: 1200px) {
+  .cards { grid-template-columns: repeat(3, 1fr); }
+}
+
 @media (max-width: 768px) {
   .cards { grid-template-columns: repeat(2, 1fr); }
   .toolbar { flex-direction: column; align-items: stretch; }
   .filters { flex-wrap: wrap; }
   .body { padding: 16px; }
-  .header { padding: 16px; }
+  .header { padding: 16px; flex-wrap: wrap; }
   .header-title { font-size: 16px; }
   .detalle-grid { grid-template-columns: 1fr; }
 }

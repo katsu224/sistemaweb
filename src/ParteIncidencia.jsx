@@ -2,7 +2,35 @@ import { useRef } from 'react'
 import html2pdf from 'html2pdf.js'
 import './ParteIncidencia.css'
 
-// ── Generar código profesional: INC-2026-04-000123 ───────────────────────────
+// ── Tipos estandarizados ─────────────────────────────────────────────────────
+const TIPOS_LABEL = {
+  ROBO: 'Robo / Asalto', INCENDIO: 'Incendio', DISTURBIO: 'Pelea / Disturbio',
+  ACCIDENTE: 'Accidente vehicular', SOSPECHOSO: 'Persona sospechosa',
+  VANDALISMO: 'Vandalismo / Daños', DROGAS: 'Drogas / Consumo',
+  RUIDO: 'Ruido excesivo', VEHICULO: 'Vehículo sospechoso',
+  ANIMAL: 'Animal peligroso', SERVICIOS: 'Problema de servicios',
+  PERSONA_RIESGO: 'Persona en riesgo', VIOLENCIA_DOM: 'Violencia doméstica',
+  EMERGENCIA_MED: 'Emergencia médica', OTRO: 'Otro',
+}
+
+const SERVICIOS_LABEL = {
+  patrulla: 'Patrulla de Serenazgo',
+  bomberos: 'Cuerpo de Bomberos',
+  ambulancia: 'Servicio de Ambulancia',
+  pnp: 'Policía Nacional del Perú',
+}
+
+// ── Helper: get valor from datos format ──────────────────────────────────────
+function val(datos, campo) {
+  if (!datos) return null
+  const d = datos[campo]
+  if (!d) return null
+  if (typeof d === 'object' && d.valor) return d.valor
+  if (typeof d === 'string' && d !== 'no indicado' && d !== 'no indicada') return d
+  return null
+}
+
+// ── Generar código ───────────────────────────────────────────────────────────
 function generarCodigo(incidencia, index) {
   const fecha = new Date(incidencia.created_at)
   const anio = fecha.getFullYear()
@@ -23,22 +51,19 @@ function formatHora(iso) {
   return new Date(iso).toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' })
 }
 
-// ── Componente principal ──────────────────────────────────────────────────────
+// ── Componente principal ─────────────────────────────────────────────────────
 export default function ParteIncidencia({ incidencias, municipioNombre, onCerrar }) {
   const docRef = useRef(null)
 
   const descargarPDF = async () => {
     const element = docRef.current
-    
     const opt = {
-      margin:       [10, 10, 10, 10], // top, left, bottom, right
+      margin:       [10, 10, 10, 10],
       filename:     `Partes_Incidencia_${municipioNombre}.pdf`,
       image:        { type: 'jpeg', quality: 0.98 },
       html2canvas:  { scale: 2, useCORS: true },
       jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
     }
-
-    // Si queremos el CSS exacto debemos agregarlo como estilo en html2canvas pero html2pdf ya copia el DOM con sus clases.
     html2pdf().set(opt).from(element).save()
   }
 
@@ -56,7 +81,10 @@ export default function ParteIncidencia({ incidencias, municipioNombre, onCerrar
         <div ref={docRef}>
           {incidencias.map((inc, idx) => {
             const datosIA = parsearDatosIA(inc)
+            const datos = datosIA?.datos || {}
             const codigo = generarCodigo(inc, idx)
+            const tipoLabel = TIPOS_LABEL[datosIA?.tipo || inc.tipo] || datosIA?.tipo_incidencia || 'Incidente'
+            const servicios = datosIA?.servicios_requeridos || inc.servicios_requeridos || []
 
             return (
               <div key={inc.id} className="parte-page">
@@ -92,15 +120,15 @@ export default function ParteIncidencia({ incidencias, municipioNombre, onCerrar
                       </tr>
                       <tr>
                         <td className="parte-label">Hora del incidente:</td>
-                        <td>{datosIA?.hora_incidente !== 'no indicada' && datosIA?.hora_incidente !== 'no indicado' ? datosIA.hora_incidente : formatHora(inc.created_at)} hrs</td>
+                        <td>{val(datos, 'hora_incidente') || formatHora(inc.created_at)} hrs</td>
                       </tr>
                       <tr>
                         <td className="parte-label">Lugar:</td>
-                        <td>{inc.lugar_descripcion || datosIA?.lugar || '—'}</td>
+                        <td>{inc.lugar_descripcion || val(datos, 'ubicacion') || datosIA?.lugar || '—'}</td>
                       </tr>
                       <tr>
                         <td className="parte-label">Referencia:</td>
-                        <td>{datosIA?.referencia !== 'no indicada' && datosIA?.referencia !== 'no indicado' ? datosIA.referencia : '—'}</td>
+                        <td>{val(datos, 'referencia') || datosIA?.referencia || '—'}</td>
                       </tr>
                       {inc.latitud && inc.longitud && (
                         <tr>
@@ -108,31 +136,45 @@ export default function ParteIncidencia({ incidencias, municipioNombre, onCerrar
                           <td>{inc.latitud.toFixed(6)}, {inc.longitud.toFixed(6)}</td>
                         </tr>
                       )}
+                      {datosIA?.modo && (
+                        <tr>
+                          <td className="parte-label">Modo de ingreso:</td>
+                          <td>{datosIA.modo === 'ALERTA' ? 'ALERTA — Situación activa en tiempo real' : 'REPORTE — Post-evento'}</td>
+                        </tr>
+                      )}
                     </tbody>
                   </table>
                 </div>
 
-                {/* ══════ 3. TIPO DE INCIDENTE ══════ */}
+                {/* ══════ 3. CLASIFICACIÓN ══════ */}
                 <div className="parte-seccion">
                   <h3>II. CLASIFICACIÓN DEL INCIDENTE</h3>
                   <table className="parte-tabla">
                     <tbody>
                       <tr>
                         <td className="parte-label">Tipo de incidente:</td>
-                        <td className="parte-bold">{datosIA?.tipo_incidencia || '—'}</td>
-                      </tr>
-                      <tr>
-                        <td className="parte-label">Código REO:</td>
-                        <td>{inc.codigo_reo && inc.codigo_reo !== 'no indicado' ? inc.codigo_reo : '—'}</td>
+                        <td className="parte-bold">{tipoLabel}</td>
                       </tr>
                       <tr>
                         <td className="parte-label">Prioridad:</td>
-                        <td className={`parte-prioridad-${inc.prioridad?.toLowerCase()}`}>{inc.prioridad}</td>
+                        <td className={`parte-prioridad-${(inc.prioridad || 'media').toLowerCase()}`}>{inc.prioridad}</td>
                       </tr>
                       <tr>
                         <td className="parte-label">Requiere PNP:</td>
                         <td>{inc.requiere_pnp ? 'SÍ — Se requiere intervención de la Policía Nacional' : 'NO'}</td>
                       </tr>
+                      {servicios.length > 0 && (
+                        <tr>
+                          <td className="parte-label">Servicios requeridos:</td>
+                          <td>{servicios.map(s => SERVICIOS_LABEL[s] || s).join(', ')}</td>
+                        </tr>
+                      )}
+                      {inc.despacho && (
+                        <tr>
+                          <td className="parte-label">Despacho inmediato:</td>
+                          <td className="parte-bold">SÍ</td>
+                        </tr>
+                      )}
                     </tbody>
                   </table>
                 </div>
@@ -151,12 +193,12 @@ export default function ParteIncidencia({ incidencias, municipioNombre, onCerrar
                     <tbody>
                       <tr>
                         <td>Sospechoso(s)</td>
-                        <td>{datosIA?.descripcion_sujetos !== 'no indicada' && datosIA?.descripcion_sujetos !== 'no indicado' ? datosIA.descripcion_sujetos : 'No identificado'}</td>
-                        <td>{datosIA?.numero_sujetos !== 'no indicado' ? datosIA.numero_sujetos : '—'}</td>
+                        <td>{val(datos, 'descripcion_sospechosos') || val(datos, 'descripcion_persona') || datosIA?.descripcion_sujetos || 'No identificado'}</td>
+                        <td>{val(datos, 'num_sospechosos') || val(datos, 'num_personas') || datosIA?.numero_sujetos || '—'}</td>
                       </tr>
                       <tr>
                         <td>Víctima(s)</td>
-                        <td>{datosIA?.victimas !== 'no indicado' && datosIA?.victimas !== 'no indicada' ? datosIA.victimas : 'No identificada'}</td>
+                        <td>{val(datos, 'victimas') || val(datos, 'heridos') || datosIA?.victimas || 'No identificada'}</td>
                         <td>—</td>
                       </tr>
                       <tr>
@@ -177,7 +219,7 @@ export default function ParteIncidencia({ incidencias, municipioNombre, onCerrar
                       <strong>{formatFechaCompleta(inc.created_at)}</strong>, el personal de serenazgo{' '}
                       {inc.usuarios ? `(${inc.usuarios.nombres} ${inc.usuarios.apellidos})` : ''}{' '}
                       reportó la siguiente situación en{' '}
-                      <strong>{inc.lugar_descripcion || datosIA?.lugar || 'la zona indicada'}</strong>:
+                      <strong>{inc.lugar_descripcion || val(datos, 'ubicacion') || 'la zona indicada'}</strong>:
                     </p>
                     <blockquote>"{inc.descripcion_original}"</blockquote>
                     {inc.transcripcion_audio && (
@@ -186,47 +228,27 @@ export default function ParteIncidencia({ incidencias, municipioNombre, onCerrar
                   </div>
                 </div>
 
-                {/* ══════ 6. ELEMENTOS RELEVANTES ══════ */}
-                {(datosIA?.vehiculo_tipo !== 'no indicado' || datosIA?.tipo_arma !== 'no indicado') && (
-                  <div className="parte-seccion">
-                    <h3>V. ELEMENTOS RELEVANTES</h3>
-                    <table className="parte-tabla">
-                      <tbody>
-                        {datosIA?.vehiculo_tipo && datosIA.vehiculo_tipo !== 'no indicado' && (
-                          <tr>
-                            <td className="parte-label">Vehículo:</td>
-                            <td>{datosIA.vehiculo_tipo} {datosIA?.vehiculo_color !== 'no indicado' ? `— Color: ${datosIA.vehiculo_color}` : ''} {datosIA?.vehiculo_placa !== 'no indicada' && datosIA?.vehiculo_placa !== 'no indicado' ? `— Placa: ${datosIA.vehiculo_placa}` : ''}</td>
-                          </tr>
-                        )}
-                        {datosIA?.tipo_arma && datosIA.tipo_arma !== 'no indicado' && (
-                          <tr>
-                            <td className="parte-label">Tipo de arma:</td>
-                            <td className="parte-bold">{datosIA.tipo_arma}</td>
-                          </tr>
-                        )}
-                        {datosIA?.danos && datosIA.danos !== 'no indicado' && (
-                          <tr>
-                            <td className="parte-label">Daños materiales:</td>
-                            <td>{datosIA.danos}</td>
-                          </tr>
-                        )}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
+                {/* ══════ 6. DETALLES ESPECÍFICOS ══════ */}
+                <SeccionDetallesEspecificos datos={datos} datosIA={datosIA} />
 
                 {/* ══════ 7. ACCIONES REALIZADAS ══════ */}
                 <div className="parte-seccion">
-                  <h3>{datosIA?.vehiculo_tipo !== 'no indicado' || datosIA?.tipo_arma !== 'no indicado' ? 'VI' : 'V'}. ACCIONES REALIZADAS</h3>
+                  <h3>{tieneDetalles(datos, datosIA) ? 'VI' : 'V'}. ACCIONES REALIZADAS</h3>
                   <table className="parte-tabla">
                     <tbody>
                       <tr>
                         <td className="parte-label">Acción tomada:</td>
-                        <td>{datosIA?.accion_tomada !== 'no indicada' && datosIA?.accion_tomada !== 'no indicado' ? datosIA.accion_tomada : 'Reporte registrado vía WhatsApp'}</td>
+                        <td>{val(datos, 'accion_tomada') || datosIA?.accion_tomada || 'Reporte registrado vía WhatsApp'}</td>
                       </tr>
                       <tr>
                         <td className="parte-label">Derivado a:</td>
-                        <td>{datosIA?.derivado_a !== 'no indicada' && datosIA?.derivado_a !== 'no indicado' ? datosIA.derivado_a : inc.requiere_pnp ? 'Policía Nacional del Perú (PNP)' : '—'}</td>
+                        <td>
+                          {val(datos, 'derivado_a') || datosIA?.derivado_a ||
+                            (inc.requiere_pnp ? 'Policía Nacional del Perú (PNP)' :
+                              servicios.length > 0 ? servicios.map(s => SERVICIOS_LABEL[s] || s).join(', ') : '—'
+                            )
+                          }
+                        </td>
                       </tr>
                       <tr>
                         <td className="parte-label">Estado:</td>
@@ -236,9 +258,9 @@ export default function ParteIncidencia({ incidencias, municipioNombre, onCerrar
                   </table>
                 </div>
 
-                {/* ══════ 8. UNIDAD / PERSONAL ══════ */}
+                {/* ══════ 8. UNIDAD ══════ */}
                 <div className="parte-seccion">
-                  <h3>{getNumeroSeccion(datosIA, 7)}. UNIDAD INTERVINIENTE</h3>
+                  <h3>{tieneDetalles(datos, datosIA) ? 'VII' : 'VI'}. UNIDAD INTERVINIENTE</h3>
                   <table className="parte-tabla">
                     <tbody>
                       <tr>
@@ -259,19 +281,40 @@ export default function ParteIncidencia({ incidencias, municipioNombre, onCerrar
 
                 {/* ══════ 9. OBSERVACIONES ══════ */}
                 <div className="parte-seccion">
-                  <h3>{getNumeroSeccion(datosIA, 8)}. OBSERVACIONES</h3>
+                  <h3>{tieneDetalles(datos, datosIA) ? 'VIII' : 'VII'}. OBSERVACIONES</h3>
                   <div className="parte-obs">
-                    {datosIA?.observaciones && datosIA.observaciones !== 'no indicada' && datosIA.observaciones !== 'no indicado'
-                      ? datosIA.observaciones
-                      : 'Ninguna observación adicional.'
-                    }
-                    {datosIA?.campos_faltantes?.length > 0 && (
-                      <p className="parte-faltantes">
-                        Campos no proporcionados en el reporte: {datosIA.campos_faltantes.join(', ')}.
-                      </p>
+                    {val(datos, 'observaciones') || datosIA?.observaciones || 'Ninguna observación adicional.'}
+                    {datosIA?.resumen_corto && (
+                      <p style={{ fontStyle: 'italic', marginTop: 6 }}>Resumen IA: {datosIA.resumen_corto}</p>
                     )}
                   </div>
                 </div>
+
+                {/* ══════ 10. EVIDENCIAS ══════ */}
+                {inc.evidencias && inc.evidencias.length > 0 && (
+                  <div className="parte-seccion" style={{ pageBreakInside: 'avoid' }}>
+                    <h3>{tieneDetalles(datos, datosIA) ? 'IX' : 'VIII'}. PANEL FOTOGRÁFICO Y ANEXOS</h3>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(12, 1fr)', gap: '10px', marginTop: '10px' }}>
+                      {inc.evidencias.map((ev, i) => (
+                        <div key={ev.id} style={{ gridColumn: inc.evidencias.length === 1 ? 'span 12' : inc.evidencias.length === 2 ? 'span 6' : 'span 4', textAlign: 'center' }}>
+                          <img
+                            src={ev.url_storage}
+                            style={{
+                              width: '100%',
+                              maxHeight: inc.evidencias.length === 1 ? '300px' : '200px',
+                              objectFit: 'cover',
+                              borderRadius: '4px',
+                              border: '1px solid #ccc'
+                            }}
+                            crossOrigin="anonymous"
+                            alt={`Anexo ${i + 1}`}
+                          />
+                          <p style={{ fontSize: '8pt', color: '#666', marginTop: '4px' }}>Anexo {i + 1} — {new Date(ev.created_at).toLocaleString('es-PE')}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
                 {/* ══════ BASE LEGAL ══════ */}
                 <div className="parte-legal">
@@ -295,7 +338,7 @@ export default function ParteIncidencia({ incidencias, municipioNombre, onCerrar
                 </div>
 
                 <div className="parte-pie">
-                  Sistema Serenazgo IA — Documento generado automáticamente • {new Date().toLocaleString('es-PE')}
+                  Sistema Serenazgo IA v2 — Documento generado automáticamente • {new Date().toLocaleString('es-PE')}
                 </div>
               </div>
             )
@@ -306,7 +349,75 @@ export default function ParteIncidencia({ incidencias, municipioNombre, onCerrar
   )
 }
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
+// ── Sección de detalles específicos según tipo ──────────────────────────────
+function SeccionDetallesEspecificos({ datos, datosIA }) {
+  const detalles = []
+
+  const camposDetalles = [
+    { key: 'vehiculo_fuga', label: 'Vehículo de fuga' },
+    { key: 'tipo_vehiculos', label: 'Tipo de vehículo' },
+    { key: 'tipo_vehiculo', label: 'Tipo de vehículo' },
+    { key: 'vehiculo_color', label: 'Color del vehículo' },
+    { key: 'placas', label: 'Placa' },
+    { key: 'armas', label: 'Tipo de arma' },
+    { key: 'direccion_fuga', label: 'Dirección de fuga' },
+    { key: 'objeto_robado', label: 'Objeto robado' },
+    { key: 'personas_atrapadas', label: 'Personas atrapadas' },
+    { key: 'magnitud', label: 'Magnitud del fuego' },
+    { key: 'tipo_estructura', label: 'Tipo de estructura' },
+    { key: 'propagacion', label: 'Propagación' },
+    { key: 'humo_toxico', label: 'Humo tóxico' },
+    { key: 'acceso_bomberos', label: 'Acceso bomberos' },
+    { key: 'num_vehiculos', label: 'Número de vehículos' },
+    { key: 'bloqueo_via', label: 'Bloqueo de vía' },
+    { key: 'fuga_conductor', label: 'Fuga del conductor' },
+    { key: 'derrame_combustible', label: 'Derrame de combustible' },
+    { key: 'violencia', label: 'Violencia física' },
+    { key: 'armas_drogas', label: 'Armas/drogas involucradas' },
+    { key: 'danos_propiedad', label: 'Daños a la propiedad' },
+    { key: 'menores_presentes', label: 'Menores presentes' },
+    { key: 'consciente', label: '¿Consciente?' },
+    { key: 'respirando', label: '¿Respirando?' },
+    { key: 'sintomas', label: 'Síntomas' },
+    { key: 'tipo_violencia', label: 'Tipo de violencia' },
+    { key: 'agresor_presente', label: 'Agresor presente' },
+    { key: 'tipo_dano', label: 'Tipo de daño' },
+    { key: 'tipo_animal', label: 'Tipo de animal' },
+    { key: 'comportamiento', label: 'Comportamiento del animal' },
+    { key: 'tipo_problema', label: 'Tipo de problema' },
+    { key: 'riesgo_peatonal', label: 'Riesgo peatonal' },
+  ]
+
+  for (const c of camposDetalles) {
+    const v = val(datos, c.key)
+    // Also check old flat format
+    const vOld = datosIA?.[c.key]
+    const value = v || (vOld && vOld !== 'no indicado' && vOld !== 'no indicada' ? vOld : null)
+    if (value) {
+      detalles.push({ label: c.label, value })
+    }
+  }
+
+  if (detalles.length === 0) return null
+
+  return (
+    <div className="parte-seccion">
+      <h3>V. ELEMENTOS RELEVANTES</h3>
+      <table className="parte-tabla">
+        <tbody>
+          {detalles.map((d, i) => (
+            <tr key={i}>
+              <td className="parte-label">{d.label}:</td>
+              <td>{d.value}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
 function parsearDatosIA(inc) {
   try {
     return typeof inc.descripcion_limpia === 'string'
@@ -315,51 +426,9 @@ function parsearDatosIA(inc) {
   } catch { return null }
 }
 
-function getNumeroSeccion(datosIA, base) {
-  const tieneElementos = datosIA?.vehiculo_tipo !== 'no indicado' || datosIA?.tipo_arma !== 'no indicado'
-  return tieneElementos ? base + 1 : base
-}
-
-function getEstilosImpresion() {
-  return `
-    @page { size: A4; margin: 20mm 15mm; }
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: 'Times New Roman', serif; font-size: 11pt; color: #1a1a1a; line-height: 1.5; }
-    .parte-page { page-break-after: always; padding: 0; }
-    .parte-page:last-child { page-break-after: auto; }
-    .parte-encabezado { display: flex; align-items: center; gap: 16px; margin-bottom: 12px; }
-    .parte-escudo { font-size: 48px; }
-    .parte-titulo-bloque { flex: 1; text-align: center; }
-    .parte-municipio { font-size: 14pt; font-weight: bold; letter-spacing: 2px; margin: 0; }
-    .parte-area { font-size: 10pt; font-weight: normal; margin: 2px 0; color: #444; }
-    .parte-tipo-doc { font-size: 16pt; font-weight: bold; margin-top: 8px; padding: 6px 20px; border: 2px solid #1a1a1a; display: inline-block; letter-spacing: 3px; }
-    .parte-codigo-bloque { text-align: right; }
-    .parte-codigo { font-size: 12pt; font-weight: bold; font-family: 'Courier New', monospace; color: #B91C1C; }
-    .parte-fecha-emision { font-size: 9pt; color: #666; margin-top: 4px; }
-    .parte-linea { border-top: 2px solid #1a1a1a; margin: 10px 0 16px; }
-    .parte-seccion { margin-bottom: 14px; }
-    .parte-seccion h3 { font-size: 11pt; font-weight: bold; text-transform: uppercase; border-bottom: 1px solid #ccc; padding-bottom: 3px; margin-bottom: 6px; }
-    .parte-tabla { width: 100%; }
-    .parte-tabla td { padding: 3px 8px; vertical-align: top; }
-    .parte-label { font-weight: bold; width: 180px; white-space: nowrap; }
-    .parte-bold { font-weight: bold; }
-    .parte-prioridad-alta { color: #B91C1C; font-weight: bold; }
-    .parte-prioridad-media { color: #B45309; font-weight: bold; }
-    .parte-prioridad-baja { color: #15803D; font-weight: bold; }
-    .parte-tabla-completa { width: 100%; border-collapse: collapse; }
-    .parte-tabla-completa th, .parte-tabla-completa td { border: 1px solid #999; padding: 4px 8px; text-align: left; }
-    .parte-tabla-completa th { background: #f0f0f0; font-weight: bold; font-size: 10pt; }
-    .parte-narrativa { padding: 8px; background: #fafafa; border-left: 3px solid #333; margin: 4px 0; }
-    .parte-narrativa blockquote { font-style: italic; margin: 8px 0 4px 16px; color: #333; }
-    .parte-nota { font-size: 9pt; color: #888; margin-top: 4px; }
-    .parte-obs { padding: 6px 8px; min-height: 40px; }
-    .parte-faltantes { font-size: 9pt; color: #888; margin-top: 6px; }
-    .parte-legal { font-size: 8pt; color: #777; text-align: center; margin: 16px 0 10px; padding: 8px; border-top: 1px dashed #ccc; }
-    .parte-firma-bloque { display: flex; justify-content: space-around; margin: 30px 0 10px; }
-    .parte-firma { text-align: center; }
-    .parte-firma-linea { width: 200px; border-bottom: 1px solid #333; margin: 0 auto 4px; height: 40px; }
-    .parte-firma-nombre { font-weight: bold; font-size: 10pt; }
-    .parte-firma-cargo { font-size: 9pt; color: #666; }
-    .parte-pie { text-align: center; font-size: 8pt; color: #aaa; margin-top: 16px; padding-top: 8px; border-top: 1px solid #eee; }
-  `
+function tieneDetalles(datos, datosIA) {
+  const keys = ['vehiculo_fuga', 'tipo_vehiculos', 'armas', 'placas', 'direccion_fuga',
+    'personas_atrapadas', 'magnitud', 'propagacion', 'violencia', 'consciente',
+    'respirando', 'tipo_violencia', 'tipo_dano', 'tipo_animal', 'tipo_problema']
+  return keys.some(k => val(datos, k) || (datosIA?.[k] && datosIA[k] !== 'no indicado'))
 }
