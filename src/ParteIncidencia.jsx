@@ -294,22 +294,20 @@ export default function ParteIncidencia({ incidencias, municipioNombre, onCerrar
                 {inc.evidencias && inc.evidencias.length > 0 && (
                   <div className="parte-seccion" style={{ pageBreakInside: 'avoid' }}>
                     <h3>{tieneDetalles(datos, datosIA) ? 'IX' : 'VIII'}. PANEL FOTOGRÁFICO Y ANEXOS</h3>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(12, 1fr)', gap: '10px', marginTop: '10px' }}>
+                    <div style={{ display: 'flex', gap: '10px', marginTop: '10px', flexWrap: 'wrap', justifyContent: 'center' }}>
                       {inc.evidencias.map((ev, i) => (
-                        <div key={ev.id} style={{ gridColumn: inc.evidencias.length === 1 ? 'span 12' : inc.evidencias.length === 2 ? 'span 6' : 'span 4', textAlign: 'center' }}>
+                        <div key={ev.id} style={{ flex: '1 1 calc(50% - 10px)', textAlign: 'center', background: '#f5f5f5', padding: '10px', borderRadius: '4px', border: '1px solid #ddd' }}>
                           <img
                             src={ev.url_storage}
                             style={{
                               width: '100%',
-                              maxHeight: inc.evidencias.length === 1 ? '300px' : '200px',
-                              objectFit: 'cover',
-                              borderRadius: '4px',
-                              border: '1px solid #ccc'
+                              maxHeight: inc.evidencias.length === 1 ? '400px' : '250px',
+                              objectFit: 'contain',
                             }}
                             crossOrigin="anonymous"
                             alt={`Anexo ${i + 1}`}
                           />
-                          <p style={{ fontSize: '8pt', color: '#666', marginTop: '4px' }}>Anexo {i + 1} — {new Date(ev.created_at).toLocaleString('es-PE')}</p>
+                          <p style={{ fontSize: '8pt', color: '#666', marginTop: '6px', fontWeight: 'bold' }}>ANEXO {i + 1} — {new Date(ev.created_at).toLocaleString('es-PE')}</p>
                         </div>
                       ))}
                     </div>

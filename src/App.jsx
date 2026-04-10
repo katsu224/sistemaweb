@@ -121,6 +121,7 @@ function Dashboard({ usuario, onLogout }) {
   const [detalleAbierto, setDetalleAbierto] = useState(null)
   const [seleccionados, setSeleccionados] = useState(new Set())
   const [mostrarDocumento, setMostrarDocumento] = useState(false)
+  const [lightboxImg, setLightboxImg] = useState(null)
 
   const municipioId = usuario.municipio_id
   const municipioNombre = usuario.municipios?.nombre || 'Mi Municipio'
@@ -403,7 +404,7 @@ function Dashboard({ usuario, onLogout }) {
 
                             {/* Detalle expandido */}
                             {detalleAbierto === i.id && datosIA && (
-                              <DetalleExpandido datosIA={datosIA} datos={datos} incidencia={i} />
+                              <DetalleExpandido datosIA={datosIA} datos={datos} incidencia={i} onOpenImage={setLightboxImg} />
                             )}
                           </td>
                           <td>{i.lugar_descripcion || <span className="text-muted">—</span>}</td>
@@ -455,6 +456,16 @@ function Dashboard({ usuario, onLogout }) {
           onCerrar={() => setMostrarDocumento(false)}
         />
       )}
+
+      {/* Lightbox Modal */}
+      {lightboxImg && (
+        <div className="lightbox-overlay" onClick={() => setLightboxImg(null)}>
+          <div className="lightbox-content" onClick={e => e.stopPropagation()}>
+            <button className="lightbox-close" onClick={() => setLightboxImg(null)}>×</button>
+            <img src={lightboxImg} alt="Evidencia ampliada" className="lightbox-img" />
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -462,7 +473,7 @@ function Dashboard({ usuario, onLogout }) {
 // ═══════════════════════════════════════════════════════════════════════════════
 // Detalle Expandido — Renderizado dinámico por tipo con confianza
 // ═══════════════════════════════════════════════════════════════════════════════
-function DetalleExpandido({ datosIA, datos, incidencia }) {
+function DetalleExpandido({ datosIA, datos, incidencia, onOpenImage }) {
   // Definir qué campos mostrar en orden lógico
   const camposRender = [
     { key: 'ubicacion', label: '📍 Ubicación' },
@@ -556,14 +567,18 @@ function DetalleExpandido({ datosIA, datos, incidencia }) {
       {/* Evidencias */}
       {incidencia.evidencias && incidencia.evidencias.length > 0 && (
         <div className="evidencias-galeria">
-          <p style={{marginTop: 10, marginBottom: 5, fontSize: 12, color: 'var(--text-muted)'}}>
+          <p style={{margin: '0 0 8px 0', fontSize: 13, color: '#94A3B8'}}>
             <strong>📸 Evidencias Gráficas ({incidencia.evidencias.length}):</strong>
           </p>
-          <div style={{display: 'flex', gap: 10, flexWrap: 'wrap'}}>
+          <div className="galeria-grid">
             {incidencia.evidencias.map(ev => (
-              <a href={ev.url_storage} target="_blank" rel="noreferrer" key={ev.id}>
-                <img src={ev.url_storage} alt="Evidencia" style={{width: 80, height: 80, objectFit: 'cover', borderRadius: 8, border: '1px solid var(--border-color)'}} />
-              </a>
+              <div 
+                key={ev.id} 
+                className="evidencia-thumb" 
+                onClick={(e) => { e.stopPropagation(); onOpenImage(ev.url_storage); }}
+              >
+                <img src={ev.url_storage} alt="Evidencia" />
+              </div>
             ))}
           </div>
         </div>
@@ -571,7 +586,7 @@ function DetalleExpandido({ datosIA, datos, incidencia }) {
 
       {/* Resumen corto */}
       {datosIA?.resumen_corto && (
-        <div style={{marginTop: 8, fontSize: 12, color: 'var(--text-muted)', fontStyle: 'italic'}}>
+        <div style={{marginTop: 12, fontSize: 13, color: '#94A3B8', fontStyle: 'italic', borderTop: '1px dashed rgba(255,255,255,0.1)', paddingTop: 12}}>
           💬 {datosIA.resumen_corto}
         </div>
       )}
