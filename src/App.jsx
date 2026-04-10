@@ -206,10 +206,12 @@ function Dashboard({ usuario, onLogout }) {
     // Liberar sesiones_bot para no violar la Foreign Key ("sesiones_bot_incidencia_id_pendiente_fkey")
     await supabase.from('sesiones_bot').update({ incidencia_id_pendiente: null }).eq('incidencia_id_pendiente', id)
 
-    // Primero borramos las evidencias relacionadas para no violar FK (si no hay CASCADE)
+    // Primero borramos registros dependientes para no violar FKs
     await supabase.from('evidencias').delete().eq('incidencia_id', id)
-    // Luego borramos el timeline
     await supabase.from('incidencia_timeline').delete().eq('incidencia_id', id)
+    await supabase.from('incidencia_detalle').delete().eq('incidencia_id', id)
+    await supabase.from('confirmaciones').delete().eq('incidencia_id', id)
+    
     // Finalmente eliminamos la incidencia
     const { error } = await supabase.from('incidencias').delete().eq('id', id)
     
@@ -236,8 +238,9 @@ function Dashboard({ usuario, onLogout }) {
     total: incidencias.length,
     CONFIRMADO: incidencias.filter(i => i.estado === 'CONFIRMADO').length,
     BORRADOR: incidencias.filter(i => i.estado === 'BORRADOR').length,
-    ALTA: incidencias.filter(i => i.prioridad === 'ALTA').length,
-    CRITICA: incidencias.filter(i => i.prioridad === 'CRITICA').length,
+    ALTA: incidencias.filter(i => i.prioridad === 'ALTA' || i.prioridad === 'CRITICA').length,
+    MEDIA: incidencias.filter(i => i.prioridad === 'MEDIA').length,
+    BAJA: incidencias.filter(i => i.prioridad === 'BAJA').length,
   }
 
   return (
@@ -247,7 +250,7 @@ function Dashboard({ usuario, onLogout }) {
       {/* ── Navbar ─────────────────────────────────────── */}
       <header className="header">
         <div className="header-left">
-          <span style={{ fontSize: 28 }}>🛡️</span>
+          <span style={{ fontSize: 28, textShadow: '0 0 15px rgba(255,255,255,0.3)' }}>🛡️</span>
           <div>
             <h1 className="header-title">{municipioNombre}</h1>
             <p className="header-sub">Serenazgo IA v2 — {usuario.nombres} ({usuario.rol})</p>
@@ -287,15 +290,15 @@ function Dashboard({ usuario, onLogout }) {
             {/* Tarjetas */}
             <div className="cards">
               {[
-                { label: 'Total', value: conteos.total, color: '#64748B', icon: '📊' },
+                { label: 'Total', value: conteos.total, color: '#A0AABF', icon: '📊' },
                 { label: 'Confirmadas', value: conteos.CONFIRMADO, color: '#10B981', icon: '✅' },
-                { label: 'Borradores', value: conteos.BORRADOR, color: '#94A3B8', icon: '📝' },
-                { label: 'P. Alta', value: conteos.ALTA, color: '#EF4444', icon: '🔴' },
-                { label: 'P. Crítica', value: conteos.CRITICA, color: '#DC2626', icon: '🆘' },
+                { label: 'Alta / Críticas', value: conteos.ALTA, color: '#EF4444', icon: '🔴' },
+                { label: 'Media', value: conteos.MEDIA, color: '#F59E0B', icon: '🟡' },
+                { label: 'Baja', value: conteos.BAJA, color: '#3B82F6', icon: '🔵' },
               ].map(c => (
                 <div key={c.label} className="card">
                   <div className="card-header">
-                    <span>{c.icon}</span>
+                    <span style={{ fontSize: 18 }}>{c.icon}</span>
                     <span className="card-label">{c.label}</span>
                   </div>
                   <span className="card-num" style={{ color: c.color }}>{c.value}</span>
